@@ -28,8 +28,16 @@ QC <- R6::R6Class("QC", list(
 		type = 'kallisto',
 		tx2gene = self$reference_details$t2g
 	  )
+	  colnames(self$txi_kallisto$counts) <- self$sample_details$s2c$sample
 	  # add count data to sample details table
 	  self$sample_details$s2c <- dplyr::mutate(self$sample_details$s2c, est_count = colSums(self$txi_kallisto$counts))
+	  write.table(
+		  data.frame(self$txi_kallisto$counts) %>% tibble::rownames_to_column(var='target_id'),
+		  file = file.path(pathing$base_path, 'raw_counts.tsv'),
+		  row.names = FALSE,
+		  quote = FALSE,
+		  sep = '\t'
+		)
 	  return(invisible(self))
 	},
 	calculate_normalised_counts = function () {
@@ -47,6 +55,13 @@ QC <- R6::R6Class("QC", list(
 	  normalised_counts <- data.frame(normalised_counts)
 	  colnames(normalised_counts) <- s2c$sample
 	  self$normalised_counts <- normalised_counts
+	  write.table(
+		  normalised_counts %>% tibble::rownames_to_column(var='target_id'),
+		  file = file.path(pathing$base_path, 'normalised_counts.tsv'),
+		  row.names = FALSE,
+		  quote = FALSE,
+		  sep = '\t'
+		)
 	  return(invisible(self))
 	},
 	calculate_ribosomal_read_percent = function () {
@@ -103,7 +118,7 @@ QC <- R6::R6Class("QC", list(
 	calculate_pc = function(
 	  sample_set, # a name for the sample se, used for scree plot and to access data in pc_data list
 	  outliers = self$outliers,
-	  n_dims = 8,
+	  n_dims = min(c(8,length(sample_details$s2c$sample)-1)),
 	  scree_plot = TRUE
 	) {
 	  data <- DESeq2::vst(round(self$txi_kallisto$counts))
@@ -165,7 +180,7 @@ QCPlots <- R6::R6Class("QCPlots", list(
 	  self$qc <- qc
 	  return(invisible(self))
 	},
-	depth_plot = function(colour = NULL, fill = NULL, save_to_file = TRUE) {
+	depth_plot = function(colour = NULL, fill = NULL, custom_colours = NULL, save_to_file = TRUE) {
 	  s2c <- self$qc$sample_details$s2c
 	  s2c$sample <- factor(s2c$sample, levels=s2c$sample[order(s2c[, fill], s2c[, colour])])
 	  p <- ggplot2::ggplot(
@@ -181,7 +196,6 @@ QCPlots <- R6::R6Class("QCPlots", list(
 		) +
 		ggplot2::labs(colour = as.character(colour), fill = as.character(fill)) +
 		ggplot2::geom_hline(yintercept=mean(s2c$est_count)) +
-		ggplot2::scale_colour_manual(values=c('blue','red')) +
 		ggplot2::ylab('Estimated read count') +
 		ggplot2::xlab('Library') +
 		ggplot2::ggtitle('Estimated read count per sequenced library') +
@@ -189,6 +203,9 @@ QCPlots <- R6::R6Class("QCPlots", list(
 			  axis.text= ggplot2::element_text(angle=45, hjust=1),
 			  plot.margin = ggplot2::unit(c(20,20,20,20), 'mm')
 		)
+	  if (!is.null(custom_colours)){
+	  		p <- p + ggplot2::scale_colour_manual(values=custom_colours)
+	  }
 	  if (save_to_file) {
 		ggplot2::ggsave(
 		  file=file.path(self$qc$base_path, 'depth.png'),
@@ -202,7 +219,7 @@ QCPlots <- R6::R6Class("QCPlots", list(
 	  	return(p)
 	  }
 	},
-	rRNA_plot = function(fill = NULL, shape = NULL, save_to_file = TRUE) {
+	rRNA_plot = function(fill = NULL, shape = NULL, custom_shapes = NULL, save_to_file = TRUE) {
 	  s2c <- self$qc$sample_details$s2c
 	  s2c$sample <- factor(s2c$sample, levels=s2c$sample[order(-s2c$rRNA_reads_percent)])
 	  p <- ggplot2::ggplot(
@@ -225,12 +242,14 @@ QCPlots <- R6::R6Class("QCPlots", list(
 		ggplot2::xlab('Library') +
 		ggplot2::ylab('Percentage of reads from rRNA genes') +
 		ggplot2::labs(fill = as.character(fill), shape = as.character(shape), size = ggplot2::element_blank()) +
-		ggplot2::scale_shape_manual(values=c(21, 24)) +
 		ggplot2::guides(fill = ggplot2::guide_legend(override.aes=list(shape=22)))+
 		ggplot2::theme(
 		  axis.text= ggplot2::element_text(angle=45, hjust=1),
 		  plot.margin = ggplot2::unit(c(20,20,20,20), 'mm')
 		)
+	  if (!is.null(custom_shapes)){
+	  		p <- p + ggplot2::scale_shape_manual(values=custom_shapes)
+	  }
 	  if (save_to_file) {
 		ggplot2::ggsave(
 		  file=file.path(self$qc$base_path, 'rRNA.png'),
@@ -244,7 +263,7 @@ QCPlots <- R6::R6Class("QCPlots", list(
 		return(p)
 	  }
 	},
-	missing_genes_plot = function(fill = NULL, shape = NULL, save_to_file = TRUE) {
+	missing_genes_plot = function(fill = NULL, shape = NULL, custom_shapes = NULL, save_to_file = TRUE) {
 	  s2c <- self$qc$sample_details$s2c
 	  if (!('missing_genes' %in% colnames(s2c))) {
 		sample_details$calculate_missing_genes()
@@ -277,12 +296,14 @@ QCPlots <- R6::R6Class("QCPlots", list(
 		ggplot2::xlab('Library') +
 		ggplot2::ylab('Common genes not detected') +
 		ggplot2::labs(fill = as.character(fill), shape = as.character(shape), size = ggplot2::element_blank()) +
-		ggplot2::scale_shape_manual(values=c(21, 24)) +
 		ggplot2::guides(fill = ggplot2::guide_legend(override.aes=list(shape=22)))+
 		ggplot2::theme(
 		  axis.text= ggplot2::element_text(angle=45, hjust=1),
 		  plot.margin = ggplot2::unit(c(20,20,20,20), 'mm')
 		)
+	  if (!is.null(custom_shapes)){
+	  		p <- p + ggplot2::scale_shape_manual(values=custom_shapes)
+	  }
 	  if (save_to_file) {
 		ggplot2::ggsave(
 		  file=file.path(qc$base_path, 'missing_genes.png'),
@@ -299,6 +320,7 @@ QCPlots <- R6::R6Class("QCPlots", list(
 	counts_plot = function(
 	  colour,
 	  fill,
+	  custom_colours = NULL,
 	  common_genes_only = FALSE,
 	  save_to_file = TRUE,
 	  file_suffix = NULL
@@ -320,8 +342,10 @@ QCPlots <- R6::R6Class("QCPlots", list(
 		ggplot2::ylab('Log2 estimated counts') +
 		ggplot2::xlab('Library') +
 		ggplot2::labs(colour = colour, fill = fill) +
-		ggplot2::theme(axis.text= ggplot2::element_text(angle=50, hjust=1)) +
-		ggplot2::scale_colour_manual(values=c('blue','red'))
+		ggplot2::theme(axis.text= ggplot2::element_text(angle=50, hjust=1))
+	  if (!is.null(custom_colours)){
+	  		p <- p + ggplot2::scale_colour_manual(values=custom_colours)
+	  }
 	  if(save_to_file) {
 	  	ggplot2::ggsave(
 		  file=file.path(self$qc$base_path, paste0('counts', file_suffix, '.png')),
@@ -375,7 +399,7 @@ QCPlots <- R6::R6Class("QCPlots", list(
 		}
 	  }
 	},
-	pca_plot = function (sample_set, pcx, pcy, panel_factors, save_to_file = TRUE) {
+	pca_plot = function (sample_set, pcx, pcy, panel_factors, custom_shapes = NULL, save_to_file = TRUE) {
 	  pc_data <- data.frame(self$qc$pc_data[[sample_set]])
 	  pc_data <-pc_data[
 		grepl(paste0('^', pcx, ' '), pc_data$pc.x) & grepl(paste0('^', pcy, ' '), pc_data$pc.y),
@@ -411,14 +435,17 @@ QCPlots <- R6::R6Class("QCPlots", list(
 			  fill = panel_factors[2],
 			  shape = panel_factors[3]
 		  ) +
-		  ggplot2::scale_shape_manual(values=c(21, 24, 22, 23 , 25)) +
 		  ggplot2::guides(
 			  fill = if(is.na(panel_factors[1])) FALSE else ggplot2::guide_legend(override.aes=list(shape=22)),
 			  colour = if(is.na(panel_factors[2])) FALSE else ggplot2::guide_legend(),
 			  shape = if(is.na(panel_factors[3])) FALSE else ggplot2::guide_legend()
 		  ) +
 		  ggplot2::xlab(x_label) +
-		  ggplot2::ylab(y_label)
+		  ggplot2::ylab(y_label) +
+		  ggplot2::scale_fill_manual(values=c('blue','yellow','red'))
+	  if (!is.null(custom_shapes)){
+	  		p <- p + ggplot2::scale_shape_manual(values=custom_shapes)
+	  }
 	  if (save_to_file) {
 		ggplot2::ggsave(
 			file.path(self$qc$base_path, paste0('PCA_', sample_set, '_', pcx, '_v_', pcy, '.png')),

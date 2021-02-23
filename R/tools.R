@@ -8,12 +8,17 @@
 `%>%` <- magrittr::`%>%`
 
 Pathing <- R6::R6Class("Pathing", list(
-  start_date = as.Date(Sys.Date(), format = '%Y%m%d'),
+  analysis_path = NULL,
   base_path = NULL,
   current_path = NULL,
-  initialize = function(outpath) {
+  initialize = function(outpath, analysis_path=NULL) {
+	if (is.null(analysis_path)) {
+		self$analysis_path = as.Date(Sys.Date(), format = '%Y%m%d')
+	} else {
+	  self$analysis_path = analysis_path
+	}
 	self$base_path = outpath
-	self$base_path = paste(self$base_path, self$start_date, sep='/')
+	self$base_path = file.path(self$base_path, self$analysis_path)
 	dir.create(self$base_path, recursive = TRUE, showWarnings = FALSE)
 	self$current_path = self$base_path
 	invisible(self)

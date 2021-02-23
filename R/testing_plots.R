@@ -7,6 +7,7 @@
 plot_volcano_custom <- function (
 	merged_results,
 	file_path,
+	min_fc = NULL,
 	top_n = 10,
 	point_alpha = 0.2
 ) {
@@ -67,7 +68,11 @@ plot_volcano_custom <- function (
 		ggplot2::xlab("beta_value") +
 		ggplot2::ylab("-log10(qval.LRT)") +
 		ggplot2::geom_vline(xintercept = 0, colour = "black", linetype = "longdash")
-	ggplot2::ggsave(file_path, plot=p)
+  	if (!(is.null(min_fc))) {
+	  p <- p + ggplot2::geom_vline(xintercept=log2(min_fc), colour='green', linetype='longdash') +
+	  	ggplot2::geom_vline(xintercept=-log2(min_fc), colour='green', linetype='longdash')
+	}
+	ggplot2::ggsave(file_path, plot=p, height=168, width=105, unit='mm')
 }
 
 

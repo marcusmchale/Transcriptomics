@@ -22,7 +22,13 @@ SampleDetails <- R6::R6Class(
           'which should correspond to the names of the  kallisto folders'
         ))
       }
-      self$s2c <- dplyr::mutate(self$s2c, path = file.path(kallisto_dir_path, self$s2c[, 'sample']))
+	  if ('path' %in% colnames(self$s2c)) {
+		self$s2c <- dplyr::mutate(self$s2c, path = file.path(kallisto_dir_path, self$s2c[, 'path']))
+	  }
+	  else {
+	    print('Warning, path not found in sample details, will attemp to guess it from the sample names')
+        self$s2c <- dplyr::mutate(self$s2c, path = file.path(kallisto_dir_path, self$s2c[, 'sample']))
+	  }
       # load sample quality details
       if (!is.null(sample_quality_file_path)) {
         if (!file.exists(sample_quality_file_path)) {
@@ -67,7 +73,7 @@ ReferenceDetails <- R6::R6Class(
       }
 	  t2g <- read.table(file_path, sep = sep, header = FALSE)
 	  if (header) {
-		t2g <- tg1[-1,]
+		t2g <- t2g[-1,]
 	  }
       self$t2g <- dplyr::rename(t2g, target_id = 'V1', gene_id = 'V2')
 	  invisible(self)

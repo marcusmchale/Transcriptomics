@@ -3,6 +3,7 @@
 # Created by: marcus
 # Created on: 07/02/2020
 
+
 SleuthModels <- R6::R6Class("SleuthModels", list(
 	s2c = NULL,
 	condition = NULL,
@@ -136,7 +137,14 @@ SleuthGeneComp <- R6::R6Class("SleuthGeneComp", list(
 	additive = NULL,
 	interaction = NULL,
 	sleuth_object = NULL,
-	initialize = function (s2c, t2g, additive, interaction) {
+	num_cores = NULL,
+	initialize = function (s2c, t2g, additive, interaction, num_cores=NULL) {
+	  if (!exists('num_cores')) {
+	  	self$num_cores <- parallel::detectCores()
+	  } else {
+		self$num_cores <- num_cores
+	  }
+	  print(paste(self$num_cores, "cores"))
 	  self$s2c <- s2c
 	  self$t2g <- t2g
 	  self$additive <- additive
@@ -150,10 +158,15 @@ SleuthGeneComp <- R6::R6Class("SleuthGeneComp", list(
 			gene_mode = TRUE,
 			aggregation_column = 'gene_id',
 			transformation_function = function(x) log2(x + 0.5),
-			filter_fun = function(x) sleuth::basic_filter(row=x, min_prop = min_prop)
-		) %>% sleuth::sleuth_fit(self$additive, 'additive')
+			filter_fun = function(x) sleuth::basic_filter(row=x, min_prop = min_prop),
+			num_cores = self$num_cores
+	  ) %>% sleuth::sleuth_fit(self$additive, 'additive')
 	  if (!(is.null(self$interaction))) {
-		self$sleuth_object <- sleuth::sleuth_fit(self$sleuth_object, self$interaction, 'interaction')
+		self$sleuth_object <- sleuth::sleuth_fit(
+		  self$sleuth_object,
+		  self$interaction,
+		  'interaction'
+		)
 	  }
 	  return(invisible(self))
 	}
@@ -167,7 +180,14 @@ SleuthTranscriptComp <- R6::R6Class("SleuthTranscriptComp", list(
 	interaction = NULL,
 	interaction_less_main = NULL,
 	sleuth_object = NULL,
-	initialize = function (s2c, t2g, reduced, additive, interaction, interaction_less_main, min_prop) {
+	num_cores = NULL,
+	initialize = function (s2c, t2g, reduced, additive, interaction, interaction_less_main, num_cores=NULL) {
+	  if (!exists('num_cores')) {
+	  	self$num_cores <- parallel::detectCores()
+	  } else {
+		self$num_cores <- num_cores
+	  }
+	  print(paste(self$num_cores, "cores"))
 	  self$s2c <- s2c
 	  self$t2g <- t2g
 	  self$reduced <- reduced
@@ -180,9 +200,10 @@ SleuthTranscriptComp <- R6::R6Class("SleuthTranscriptComp", list(
 	  self$sleuth_object <- sleuth::sleuth_prep(
 			self$s2c,
 			target_mapping = self$t2g,
-			aggregation_column = 'gene_id',
+			aggregation_column = if (is.null(self$t2g)) Null else 'gene_id',
 			transformation_function = function(x) log2(x + 0.5),
-			filter_fun = function(x) sleuth::basic_filter(row=x, min_prop = min_prop)
+			filter_fun = function(x) sleuth::basic_filter(row=x, min_prop = min_prop),
+			num_cores = self$num_cores
 	  ) %>%
 		sleuth::sleuth_fit(self$reduced, 'reduced') %>%
 		sleuth::sleuth_fit(self$additive, 'additive')
@@ -215,15 +236,15 @@ SleuthTranscriptComp <- R6::R6Class("SleuthTranscriptComp", list(
 				test='additive:interaction',
 				test_type='lrt',
 				pval_aggregate = FALSE
-			)[,c('target_id', 'qval')]
-			colnames(transcript_additive_v_interaction_lrt_qval) <- c('target_id', 'interaction_qval')
+			)[,c('target_id', 'pval', 'qval')]
+			colnames(transcript_additive_v_interaction_lrt_qval) <- c('target_id', 'interaction_pval', 'interaction_qval')
 			transcript_interaction_less_main_v_interaction_lrt_qval <- sleuth::sleuth_results(
 				self$sleuth_object,
 				test='interaction_less_main:interaction',
 				test_type = 'lrt',
 				pval_aggregate = FALSE
-			)[,c('target_id', 'qval')]
-			colnames(transcript_interaction_less_main_v_interaction_lrt_qval) <- c('target_id', 'main_effect_qval')
+			)[,c('target_id', 'pval', 'qval')]
+			colnames(transcript_interaction_less_main_v_interaction_lrt_qval) <- c('target_id', 'main_effect_pval', 'main_effect_qval')
 			transcript_additive_lrt_table <- merge(
 				transcript_additive_lrt_table,
 				transcript_additive_v_interaction_lrt_qval,
@@ -250,15 +271,15 @@ SleuthTranscriptComp <- R6::R6Class("SleuthTranscriptComp", list(
 				test='additive:interaction',
 				test_type='lrt',
 				pval_aggregate = TRUE
-			)[,c('target_id', 'qval')]
-			gene_interaction_less_main_v_interaction_lrt_qval <- sleuth::sleuth_results(
+			)[,c('target_id', 'pval', 'qval')]
+			colnames(gene_additive_v_interaction_lrt_qval) <- c('target_id', 'interaction_pval', 'interaction_qval')
+		  	gene_interaction_less_main_v_interaction_lrt_qval <- sleuth::sleuth_results(
 				self$sleuth_object,
 				test='interaction_less_main:interaction',
 				test_type = 'lrt',
 				pval_aggregate = TRUE
-			)[,c('target_id', 'qval')]
-			colnames(gene_additive_v_interaction_lrt_qval) <- c('target_id', 'interaction_qval')
-			colnames(gene_interaction_less_main_v_interaction_lrt_qval) <- c('target_id', 'main_effect_qval')
+			)[,c('target_id', 'pval', 'qval')]
+			colnames(gene_interaction_less_main_v_interaction_lrt_qval) <- c('target_id', 'main_effect_pval', 'main_effect_qval')
 			gene_additive_lrt_table <- merge(
 				gene_additive_lrt_table,
 				gene_additive_v_interaction_lrt_qval,
@@ -283,7 +304,14 @@ SleuthAssessCovariates <- R6::R6Class('SleuthAssessCovariates', list(
 	so = NULL,
 	s2c = NULL,
 	t2g = NULL,
-	initialize = function(s2c, t2g, outliers = NULL) {
+	num_cores = NULL,
+	initialize = function(s2c, t2g, outliers = NULL, num_cores=NULL) {
+	  if (!exists('num_cores')) {
+	  	self$num_cores <- parallel::detectCores()
+	  } else {
+		self$num_cores <- num_cores
+	  }
+	  print(paste(self$num_cores, "cores"))
 	  self$s2c <- s2c
 	  if (!is.null(outliers)) {
 		self$s2c <- self$s2c[!(self$s2c$sample %in% outliers),]
@@ -292,8 +320,9 @@ SleuthAssessCovariates <- R6::R6Class('SleuthAssessCovariates', list(
 	  self$so <- sleuth::sleuth_prep(
 		s2c,
 		target_mapping = t2g,
-		aggregation_column = 'gene_id',
-		transformation_function = function(x) log2(x + 0.5)
+		aggregation_column = if (is.null(t2g)) Null else 'gene_id',
+		transformation_function = function(x) log2(x + 0.5),
+		num_cores = self$num_cores
 	  )
 	  return(invisible(self))
 	},
@@ -326,10 +355,16 @@ SleuthMultComp <- R6::R6Class("SleuthMultComp", list(
 	s2c = NULL,
 	t2g = NULL,
 	condition = NULL,
-	initialize  = function(pathing, sample_details, reference_details, outliers = NULL, subset_on = NULL, subset_name = NULL) {
+	initialize  = function(
+	  pathing,
+	  sample_details,
+	  reference_details,
+	  outliers = NULL,
+	  extra_path = NULL
+	) {
 	  self$base_path <- pathing$return_to_base()$append_to_path('sleuth_testing')$current_path
-	  if (!is.null(subset_on)) {
-		self$base_path <- file.path(self$base_path, paste('each', subset_on, sep='_'), subset_name)
+	  if (!is.null(extra_path)) {
+		self$base_path <- file.path(self$base_path, extra_path)
 	  }
 	  dir.create(self$base_path, recursive = TRUE, showWarnings = FALSE)
 	  self$s2c <- sample_details$s2c[, colSums(is.na(sample_details$s2c)) == 0] # get rid of any columns with missing values
@@ -392,7 +427,39 @@ SleuthMultComp <- R6::R6Class("SleuthMultComp", list(
 	  }
 	  return(wt_results)
 	},
-	analyse_condition = function(condition, covariates = NULL, interacting_covariates = NULL) {
+	min_fc_result =  function(result, min_fc=NULL) {
+	  if (is.null(min_fc)) {
+		return(result)
+	  }
+	  print('Adjusting the qval.LRT and qval.WT to reflect the arbitrary fold-change threshold')
+	  print('This is done because the filtering means less comparisons are being made')
+	  min_b <- log2(min_fc)
+	  # replace the qvals with BH corrected qvals having filtered the targets
+	  pval.LRT <-  ifelse(abs(result$b) > min_b, result$pval.LRT, 1)
+	  pval.WT <- ifelse(abs(result$b) > min_b, result$pval.WT, 1)
+	  result$qval.LRT <- p.adjust(pval.LRT)
+	  result$qval.WT <- p.adjust(pval.WT)
+	  if ('interaction_qval' %in% colnames(result)) {
+		print('Also adjusting the interaction_qval and main_effect_qval for the same reason')
+		interaction_pval <- ifelse(abs(result$b) > min_b, result$interaction_pval, 1)
+		main_effect_pval <- ifelse(abs(result$b) > min_b, result$main_effect_pval, 1)
+		result$interaction_qval <- p.adjust(interaction_pval)
+		result$interaction_qval <- p.adjust(main_effect_pval)
+	  }
+	  return(result)
+	},
+	analyse_condition = function(
+	  condition,
+	  covariates = NULL,
+	  interacting_covariates = NULL,
+	  intercepts = NULL,
+	  min_fc = NULL,
+	  top_n=10,
+	  num_cores = NULL
+   	) {
+	  if (is.null(num_cores)) {
+	  	num_cores <- parallel::detectCores()
+	  }
 	  outpath <- file.path(self$base_path, condition)
 	  dir.create(outpath, showWarnings = FALSE)
 	  sig_value <- self$sig_value
@@ -400,7 +467,9 @@ SleuthMultComp <- R6::R6Class("SleuthMultComp", list(
 	  sleuth_models <- SleuthModels$new(self$s2c, condition, covariates, interacting_covariates)$prepare_models()
 	  s2c <- sleuth_models$s2c
 	  min_prop <- self$calculate_min_prop()
-	  intercepts <- self$get_intercepts()
+	  if (is.null(intercepts)) {
+	 	intercepts <- self$get_intercepts()
+	  }
 	  for (intercept in intercepts) {
 		print(paste0('Intercept is: ', intercept))
 		s2c[,condition] <- relevel(s2c[,condition], ref=intercept)
@@ -409,17 +478,18 @@ SleuthMultComp <- R6::R6Class("SleuthMultComp", list(
 	  	condition_pairs <- Filter(function(x) x[[1]] == intercept, condition_pairs)
 		wt_tables <- vector(mode='list', length = 2)
 		names(wt_tables) <- c('gene', 'transcript')
-		gene_comp <- SleuthGeneComp$new(
-			  s2c,
-			  self$t2g,
-			  sleuth_models$additive,
-			  sleuth_models$interaction
-			)$
-			  fit_models(min_prop)
+	  	gene_comp <- SleuthGeneComp$new(
+				s2c,
+				self$t2g,
+				sleuth_models$additive,
+				sleuth_models$interaction,
+				num_cores = num_cores
+			  )$
+				fit_models(min_prop)
 		wt_tables[['gene']] <- self$get_wt_tables(
-			gene_comp$sleuth_object,
-			condition_pairs
-		)
+			  gene_comp$sleuth_object,
+			  condition_pairs
+		  )
 		rm(gene_comp)
 		transcript_comp <- SleuthTranscriptComp$new(
 			s2c,
@@ -427,7 +497,8 @@ SleuthMultComp <- R6::R6Class("SleuthMultComp", list(
 			sleuth_models$reduced,
 			sleuth_models$additive,
 			sleuth_models$interaction,
-			sleuth_models$interaction_less_main
+			sleuth_models$interaction_less_main,
+			num_cores = num_cores
 		)$
 		  fit_models(min_prop)$
 		  perform_lrt_tests()
@@ -447,10 +518,18 @@ SleuthMultComp <- R6::R6Class("SleuthMultComp", list(
 			  by = 'target_id',
 			  sort = FALSE,
 			  suffixes = c(".LRT", ".WT")
-			) %>% dplyr::arrange(
-			  !(interaction_qval > sig_value | (interaction_qval <= sig_value & main_effect_qval <= sig_value)),
-			  qval.LRT
 			)
+			result <- self$min_fc_result(result, min_fc)
+			if (is.null(self$interaction)) {
+			  	result %>% dplyr::arrange(
+					qval.LRT > sig_value & qval.WT > sig_value
+			  	)
+			} else {
+				result %>% dplyr::arrange(
+					!(interaction_qval > sig_value | (interaction_qval <= sig_value & main_effect_qval <= sig_value)),
+					qval.LRT
+			  	)
+			}
 			dir.create(file.path(outpath, gt),  showWarnings = FALSE)
 		  	write.table(
 			  result,
@@ -461,7 +540,9 @@ SleuthMultComp <- R6::R6Class("SleuthMultComp", list(
 			)
 			plot_volcano_custom(
 				result,
-				file.path(outpath, gt, paste0(paste(pair, collapse='_v_'), '_volcano.png'))
+				file.path(outpath, gt, paste0(paste(pair, collapse='_v_'), '_volcano.png')),
+				min_fc = min_fc,
+				top_n = top_n
 			)
 			if (is.null(self$interaction)) {
 			  significant_targets <- dplyr::filter(

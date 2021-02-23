@@ -1,0 +1,23 @@
+Package: Transcriptomics
+Title: Analyse Transcriptomic Data
+Version: 0.0.0.9001
+Authors@R: 
+    person(given = "Marcus",
+           family = "McHale",
+           role = c("aut", "cre"),
+           email = "marus.mchale@nuigalway.ie",
+           comment = c(ORCID = "0000-0001-9696-4055"))
+Description:
+    Quantify transcript abundance from pseudoalignment (Kallisto) and test using linear models (Sleuth and Limma) .
+    Quality control is performed with a tximport and DESeq2, mostly for the vst transform,
+License: GPL3
+Encoding: UTF-8
+LazyData: true
+Imports:
+    dplyr (>= 0.8.5),
+    ggplot2 (>= 3.3.0),
+    ggrepel (>= 0.8.2),
+    sleuth (>= 0.30.0),
+    limma (>= 3.42.2),
+    tximport (>= 1.14.2),
+    DESeq2 (>= 1.26.0)
