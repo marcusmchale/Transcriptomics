@@ -14,14 +14,16 @@ SampleDetails <- R6::R6Class(
 		stop('Kallisto data directory was not found')
 	  }
 	  # Load sample to condition mapping
-	  self$s2c <- read.table(s2c_file_path, header = TRUE, sep = ",")
+	  self$s2c <- read.table(s2c_file_path, header = TRUE, sep = ",", stringsAsFactors = F)
 	  # Add paths to kallisto ouput
       if (!('sample' %in% colnames(self$s2c))) {
         stop(paste(
           'Samples to conditions matrix must have a sample name column',
           'which should correspond to the names of the  kallisto folders'
         ))
-      }
+      } else {
+		self$s2c$sample <- factor(self$s2c$sample)
+	  }
 	  if ('path' %in% colnames(self$s2c)) {
 		self$s2c <- dplyr::mutate(self$s2c, path = file.path(kallisto_dir_path, self$s2c[, 'path']))
 	  }

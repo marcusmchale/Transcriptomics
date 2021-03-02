@@ -350,7 +350,7 @@ SleuthAssessCovariates <- R6::R6Class('SleuthAssessCovariates', list(
 
 
 SleuthMultComp <- R6::R6Class("SleuthMultComp", list(
-	sig_value = 0.05,
+	alpha = 0.05,
 	base_path = NULL,
 	s2c = NULL,
 	t2g = NULL,
@@ -462,7 +462,6 @@ SleuthMultComp <- R6::R6Class("SleuthMultComp", list(
 	  }
 	  outpath <- file.path(self$base_path, condition)
 	  dir.create(outpath, showWarnings = FALSE)
-	  sig_value <- self$sig_value
 	  self$condition <- condition
 	  sleuth_models <- SleuthModels$new(self$s2c, condition, covariates, interacting_covariates)$prepare_models()
 	  s2c <- sleuth_models$s2c
@@ -522,11 +521,11 @@ SleuthMultComp <- R6::R6Class("SleuthMultComp", list(
 			result <- self$min_fc_result(result, min_fc)
 			if (is.null(self$interaction)) {
 			  	result %>% dplyr::arrange(
-					qval.LRT > sig_value & qval.WT > sig_value
+					qval.LRT > self$alpha & qval.WT > self$alpha
 			  	)
 			} else {
 				result %>% dplyr::arrange(
-					!(interaction_qval > sig_value | (interaction_qval <= sig_value & main_effect_qval <= sig_value)),
+					!(interaction_qval > self$alpha | (interaction_qval <= self$alpha & main_effect_qval <= self$alpha)),
 					qval.LRT
 			  	)
 			}

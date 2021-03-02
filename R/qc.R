@@ -90,26 +90,41 @@ QC <- R6::R6Class("QC", list(
 	  common_genes <- self$normalised_counts[
 		rowSums(self$normalised_counts >= self$detection_threshold) >= length(s2c$sample)-self$missing_samples_threshold,
 	  ]
-	  self$n_common_genes <- dim(common_genes)[1]
+	  self$n_common_genes <- nrow(common_genes)
 	  self$sample_details$s2c$missing_genes <- colSums(
 		common_genes <= self$detection_threshold
 	  )
 	  return(invisible(self))
 	},
-	set_outliers = function() {
-	  outliers <- vector()
-	  if ('rRNA_reads_percent' %in% colnames(self$sample_details$s2c)) {
-		s2c <- self$sample_details$s2c
-		 rRNA_outliers <- self$sample_details$s2c$sample[
-		   s2c$rRNA_reads_percent %in% boxplot.stats(s2c$rRNA_reads_percent)$out
-		 ]
-		outliers <- c(as.character(outliers), as.character(rRNA_outliers))
+	calculate_n_genes = function () {
+	  # count genes detected with more than detection threshold est_counts
+	  if (is.null(self$txi_kallisto)) {
+		self$sample_details$tx_import()
 	  }
-	  if ('missing_genes' %in% colnames(self$sample_details$s2c)) {
-		 missing_genes_outliers <- self$sample_details$s2c$sample[
-		   self$sample_details$s2c$missing_genes %in% boxplot.stats(self$sample_details$s2c$missing_genes)$out
-		 ]
-		outliers <- c(as.character(outliers), as.character(missing_genes_outliers))
+	  if (is.null(self$normalised_counts)) {
+		self$calculate_normalised_counts()
+	  }
+	  self$sample_details$s2c$n_genes <- colSums(self$normalised_counts >= self$detection_threshold)
+	  return(invisible(self))
+	},
+	set_outliers = function(qc_parameters) {
+	  calculation_functions <- list(
+		'rRNA_reads_percent'=self$calculate_rRNA_reads_percent,
+		'n_genes'=self$calculate_n_genes,
+		'missing_genes'=self$calculate_missing_genes
+	  )
+	  outliers <- vector()
+	  for (q in qc_parameters) {
+		if (!(qc_parameters %in% colnames(self$sample_details$s2c))) {
+		  calculation_functions[[q]]()
+		}
+		q_outliers <- self$sample_details$s2c$sample[
+		  self$sample_details$s2c[[q]] %in% boxplot.stats(self$sample_details$s2c[[q]])$out
+		]
+		outliers <- c(
+		  as.character(outliers),
+		  as.character(q_outliers)
+		)
 	  }
 	  self$outliers <- unique(outliers)
 	  return(invisible(self))
@@ -221,7 +236,12 @@ QCPlots <- R6::R6Class("QCPlots", list(
 	},
 	rRNA_plot = function(fill = NULL, shape = NULL, custom_shapes = NULL, save_to_file = TRUE) {
 	  s2c <- self$qc$sample_details$s2c
+	  if (!('rRNA_reads_percent' %in% colnames(s2c))) {
+		self$qc$calculate_ribosomal_read_percent()
+		s2c <- self$qc$sample_details$s2c
+	  }
 	  s2c$sample <- factor(s2c$sample, levels=s2c$sample[order(-s2c$rRNA_reads_percent)])
+	  box_stats <- boxplot.stats(s2c$rRNA_reads_percent)$stats
 	  p <- ggplot2::ggplot(
 			s2c,
 			ggplot2::aes(
@@ -231,6 +251,8 @@ QCPlots <- R6::R6Class("QCPlots", list(
 				shape = if(is.null(shape))'circle' else s2c[, shape]
 			)
 	  ) +
+		ggplot2::geom_hline(yintercept=box_stats[1],linetype='dashed', color='red') +
+		ggplot2::geom_hline(yintercept=box_stats[5],linetype='dashed', color='red') +
 		ggplot2::geom_point(size=3) +
 		#ggrepel::geom_text_repel(
 		#  ggplot2::aes(
@@ -266,9 +288,11 @@ QCPlots <- R6::R6Class("QCPlots", list(
 	missing_genes_plot = function(fill = NULL, shape = NULL, custom_shapes = NULL, save_to_file = TRUE) {
 	  s2c <- self$qc$sample_details$s2c
 	  if (!('missing_genes' %in% colnames(s2c))) {
-		sample_details$calculate_missing_genes()
+		self$qc$calculate_missing_genes()
+		s2c <- self$qc$sample_details$s2c
 	  }
 	  s2c$sample <- factor(s2c$sample, levels=s2c$sample[order(-s2c$missing_genes)])
+	  box_stats <- boxplot.stats(s2c$missing_genes)$stats
 	  p <- ggplot2::ggplot(
 			s2c,
 			ggplot2::aes(
@@ -278,6 +302,8 @@ QCPlots <- R6::R6Class("QCPlots", list(
 				shape=s2c[, shape]
 			)
 	  ) +
+		ggplot2::geom_hline(yintercept=box_stats[1],linetype='dashed', color='red') +
+		ggplot2::geom_hline(yintercept=box_stats[5],linetype='dashed', color='red') +
 		ggplot2::geom_point(size=3) +
 		#ggrepel::geom_text_repel(
 		#  ggplot2::aes(
@@ -317,6 +343,55 @@ QCPlots <- R6::R6Class("QCPlots", list(
 		return(p)
 	  }
 	},
+	n_genes_plot = function(fill = NULL, shape = NULL, custom_shapes = NULL, save_to_file = TRUE) {
+	  s2c <- self$qc$sample_details$s2c
+	  if (!('n_genes' %in% colnames(s2c))) {
+		self$qc$calculate_n_genes()
+		s2c <- self$qc$sample_details$s2c
+	  }
+	  s2c$sample <- factor(s2c$sample, levels=s2c$sample[order(s2c$n_genes)])
+	  box_stats <- boxplot.stats(s2c$n_genes)$stats
+	  p <- ggplot2::ggplot(
+			s2c,
+			ggplot2::aes(
+				x=sample,
+				y=n_genes,
+				fill=s2c[, fill],
+				shape=s2c[, shape]
+			)
+	  ) +
+		ggplot2::geom_hline(yintercept=box_stats[1],linetype='dashed', color='red') +
+		ggplot2::geom_hline(yintercept=box_stats[5],linetype='dashed', color='red') +
+		ggplot2::geom_point(size=3) +
+		ggplot2::ggtitle(paste0(
+				'Number of genes detected (i.e estimated count > ',
+				self$qc$detection_threshold,
+				') in each library'
+			)) +
+		ggplot2::xlab('Library') +
+		ggplot2::ylab('Genes detected') +
+		ggplot2::labs(fill = as.character(fill), shape = as.character(shape), size = ggplot2::element_blank()) +
+		ggplot2::guides(fill = ggplot2::guide_legend(override.aes=list(shape=22)))+
+		ggplot2::theme(
+		  axis.text= ggplot2::element_text(angle=45, hjust=1),
+		  plot.margin = ggplot2::unit(c(20,20,20,20), 'mm')
+		)
+	  if (!is.null(custom_shapes)){
+	  		p <- p + ggplot2::scale_shape_manual(values=custom_shapes)
+	  }
+	  if (save_to_file) {
+		ggplot2::ggsave(
+		  file=file.path(qc$base_path, 'n_genes.png'),
+		  plot=p,
+		  width=self$width,
+		  height=self$height,
+		  units=self$units
+		)
+		return(invisible(self))
+	  } else {
+		return(p)
+	  }
+	},
 	counts_plot = function(
 	  colour,
 	  fill,
@@ -330,7 +405,7 @@ QCPlots <- R6::R6Class("QCPlots", list(
 	  }
 	  logcounts <- data.frame(self$qc$get_log_counts(common_genes_only))
 	  s2c <- self$qc$sample_details$s2c
-	  logcounts$sample <- factor(logcounts$sample, levels= levels(s2c$sample))
+	  logcounts$sample <- factor(logcounts$sample, levels=levels(s2c$sample))
 	  p <- ggplot2::ggplot(
 		logcounts,
 		ggplot2::aes(x=sample, y=log2_est_count)
