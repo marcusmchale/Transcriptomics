@@ -61,9 +61,9 @@ LimmaTesting <- R6::R6Class("LimmaTesting", list(
 		  keep <- unlist(apply(s2c_same, 2, all))
 		  keep[ID] <- T
 		  s2c <- self$sample_details$s2c %>%
-			dplyr::select(which(keep)) %>%
 		  	dplyr::group_by(across(all_of(ID))) %>%
 			dplyr::slice(1) %>%
+			dplyr::select(which(keep)) %>%
 			dplyr::ungroup()
 		  if (!all(dim(s2c)==dim(self$sample_details$s2c))) {
 			print(paste("Summing technical replicates and removing rows where",  ID, "is duplicated"))
