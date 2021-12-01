@@ -48,6 +48,28 @@ LimmaTesting <- R6::R6Class("LimmaTesting", list(
 		)
 	  	if (!(is.null(ID))) {
 		  self$dge_list <- edgeR::sumTechReps(lt$dge_list, self$sample_details$s2c[, ID])
+		  all_same <- function(v) {
+			if(length(unique(v)) == 1) {
+			  TRUE
+			} else {
+			  FALSE
+			}
+		  }
+		  s2c_same <- self$sample_details$s2c %>%
+			dplyr::group_by(across(all_of(ID))) %>%
+		  	dplyr::summarise(across(.fns=all_same))
+		  keep <- unlist(apply(s2c_same, 2, all))
+		  keep[ID] <- T
+		  s2c <- self$sample_details$s2c %>%
+			dplyr::select(which(keep)) %>%
+		  	dplyr::group_by(across(all_of(ID))) %>%
+			dplyr::slice(1) %>%
+			dplyr::ungroup()
+		  if (!all(dim(s2c)==dim(self$sample_details$s2c))) {
+			print(paste("Summing technical replicates and removing rows where",  ID, "is duplicated"))
+			print(paste("Also removing columns that would be ambiguous, i.e. where summed replicates differ"))
+			self$sample_details$s2c <- s2c
+		  }
 		}
 	  	self$dge_list <- edgeR::calcNormFactors(self$dge_list) # default method is TMM
 	  	# i found in at least some cases that the norm factors affect filterbyexpr

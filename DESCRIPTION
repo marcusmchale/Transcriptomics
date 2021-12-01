@@ -1,6 +1,6 @@
 Package: Transcriptomics
 Title: Analyse Transcriptomic Data
-Version: 0.0.0.9001
+Version: 0.0.0.9004
 Authors@R: 
     person(given = "Marcus",
            family = "McHale",
